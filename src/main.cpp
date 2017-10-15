@@ -201,7 +201,7 @@ int main() {
   int lane = 1;
   
   // have a reference velocity below speed limit
-  double ref_vel = 49.5; //mph
+  double ref_vel = 0; //mph, we start at 0
 
   h.onMessage([&ref_vel, &lane, &map_waypoints_x, &map_waypoints_y, &map_waypoints_s, &map_waypoints_dx, &map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
@@ -245,6 +245,40 @@ int main() {
           	json msgJson;
 
           	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
+          	
+          	if(prev_size >0){
+          	  car_s = end_path_s;          	
+          	}
+          	
+          	bool too_close = false;
+          	
+          	// find ref_v to use (if restricted by vehicles in front of us)
+          	for(int i=0; i<sensor_fusion.size(); i++){
+          	  
+          	  float d = sensor_fusion[i][6];
+          	  // is the car anywhere inside our lane? (lane middle +/-lane width/2)
+          	  if((d < 2+4*lane+2) && (d > 2+4*lane-2)){
+          	    double vx = sensor_fusion[i][3];
+          	    double vy = sensor_fusion[i][4];
+          	    double check_speed = sqrt(vx*vx+vy*vy);
+          	    double check_car_s = sensor_fusion[i][5];
+          	    
+          	    check_car_s += (double) prev_size*0.02*check_speed; // where will the target vehicle be in the future? 
+          	    // check if the target is in front of us and that the gap is smaller than 30m
+          	    if((check_car_s > car_s) && (check_car_s-car_s < 30)){
+          	      // do some logic here... e.g. lower speed
+          	      //ref_vel = check_speed-0.5; //mph
+          	      too_close = true;
+          	    }
+          	  }
+          	}
+          	
+          	if(too_close){
+          	  ref_vel -= 0.3; // mph
+          	}else if(ref_vel < 49.5){
+          	  ref_vel += 0.3; // mph
+          	}
+         
           	
           	// list of widely spaced waypoints, evenly spaced at 30m
           	vector<double> ptsx;
