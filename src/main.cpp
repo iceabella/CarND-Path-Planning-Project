@@ -269,6 +269,9 @@ int main() {
           	      // do some logic here... e.g. lower speed
           	      //ref_vel = check_speed-0.5; //mph
           	      too_close = true;
+          	      
+          	      lane = (lane+1)%3; // change lane
+          	      
           	    }
           	  }
           	}
