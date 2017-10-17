@@ -251,37 +251,62 @@ int main() {
           	}
           	
           	bool too_close = false;
+          	bool targetLeft = false;
+          	bool targetRight = false;
           	
           	// find ref_v to use (if restricted by vehicles in front of us)
           	for(int i=0; i<sensor_fusion.size(); i++){
-          	  
+          	  double vx = sensor_fusion[i][3];
+        	    double vy = sensor_fusion[i][4];
+        	    double check_speed = sqrt(vx*vx+vy*vy);
+        	    double check_car_s = sensor_fusion[i][5];
+        	    check_car_s += (double) prev_size*0.02*check_speed; // where will the target vehicle be in the future? 
+        	  
           	  float d = sensor_fusion[i][6];
           	  // is the car anywhere inside our lane? (lane middle +/-lane width/2)
-          	  if((d < 2+4*lane+2) && (d > 2+4*lane-2)){
-          	    double vx = sensor_fusion[i][3];
-          	    double vy = sensor_fusion[i][4];
-          	    double check_speed = sqrt(vx*vx+vy*vy);
-          	    double check_car_s = sensor_fusion[i][5];
-          	    
-          	    check_car_s += (double) prev_size*0.02*check_speed; // where will the target vehicle be in the future? 
+          	  if((d < 2+4*lane+2) && (d > 2+4*lane-2)){   	              	    
           	    // check if the target is in front of us and that the gap is smaller than 30m
           	    if((check_car_s > car_s) && (check_car_s-car_s < 30)){
           	      // do some logic here... e.g. lower speed
           	      //ref_vel = check_speed-0.5; //mph
           	      too_close = true;
-          	      
-          	      lane = (lane+1)%3; // change lane
-          	      
+          	      /*
+          	      // change lane
+          	      if(lane==0)
+          	        lane++;
+          	      else
+          	        lane--;  */      	                	      
           	    }
+          	  } else if(lane==0 || ((d < 2+4*lane-2) && (d > -2+4*lane-2))){ //check lane to the left
+          	    // check if the gap to the target is too small
+          	    if(lane==0 || ((check_car_s-car_s > -30) && (check_car_s-car_s < 30)))
+          	      targetLeft = true;
+          	                	  
+          	  } else if(lane==2 || ((d < 4+4*lane+4) && (d > 2+4*lane+2))){ // check lane to the right
+          	    // check if the gap to the target is too small
+          	    if(lane==2 || ((check_car_s-car_s > -30) && (check_car_s-car_s < 30)))
+          	      targetRight = true;
+          	      
           	  }
           	}
+          	/*
+          	std::cout << "too_close: " << too_close << std::endl;
+          	std::cout << "targetLeft: " << targetLeft << std::endl;
+          	std::cout << "targetRight: " << targetRight << std::endl;*/
           	
-          	if(too_close){
+          	if(too_close && targetRight && targetLeft){ // no other option than to follow target in front of us
           	  ref_vel -= 0.3; // mph
-          	}else if(ref_vel < 49.5){
+          	  //std::cout << "lower speed...\n";
+          	} else if(too_close && targetRight && !targetLeft){ // lane change to the left
+          	  // change lane
+      	      lane--;   
+      	    } else if(too_close && targetLeft && !targetRight){ // lane change to the right
+      	      lane++;	
+          	} else if(!too_close && ref_vel < 49.5){ // accelerate if speed is below speed limit and no target in our lane
           	  ref_vel += 0.3; // mph
+          	  //std::cout << "higher speed...\n";
           	}
-         
+            //std::cout << "lane: " << lane << std::endl;
           	
           	// list of widely spaced waypoints, evenly spaced at 30m
           	vector<double> ptsx;
