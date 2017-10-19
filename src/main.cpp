@@ -9,11 +9,14 @@
 #include "Eigen-3.3/Eigen/QR"
 #include "json.hpp"
 #include "spline.h"
+#include "helper_functions.hpp"
 
 using namespace std;
 
 // for convenience
 using json = nlohmann::json;
+
+/*
 
 // For converting back and forth between radians and degrees.
 constexpr double pi() { return M_PI; }
@@ -159,6 +162,7 @@ vector<double> getXY(double s, double d, const vector<double> &maps_s, const vec
 	return {x,y};
 
 }
+*/
 
 int main() {
   uWS::Hub h;
@@ -277,25 +281,30 @@ int main() {
           	      else
           	        lane--;  */      	                	      
           	    }
-          	  } else if(lane==0 || ((d < 2+4*lane-2) && (d > -2+4*lane-2))){ //check lane to the left
+          	  } else if(lane!=0 && ((d < 2+4*lane-2) && (d > -2+4*lane-2))){ //check lane to the left
           	    // check if the gap to the target is too small
-          	    if(lane==0 || ((check_car_s-car_s > -30) && (check_car_s-car_s < 30)))
+          	    if((check_car_s-car_s > -20) && (check_car_s-car_s < 30))
           	      targetLeft = true;
           	                	  
-          	  } else if(lane==2 || ((d < 4+4*lane+4) && (d > 2+4*lane+2))){ // check lane to the right
+          	  } else if(lane!=2 && ((d < 4+4*lane+4) && (d > 2+4*lane+2))){ // check lane to the right
           	    // check if the gap to the target is too small
-          	    if(lane==2 || ((check_car_s-car_s > -30) && (check_car_s-car_s < 30)))
+          	    if(lane==2 || ((check_car_s-car_s > -20) && (check_car_s-car_s < 30)))
           	      targetRight = true;
           	      
           	  }
           	}
-          	/*
+          	
+          	if(lane == 0)
+          	  targetLeft = true;
+          	else if(lane == 2)
+          	  targetRight = true;
+          	
           	std::cout << "too_close: " << too_close << std::endl;
           	std::cout << "targetLeft: " << targetLeft << std::endl;
-          	std::cout << "targetRight: " << targetRight << std::endl;*/
+          	std::cout << "targetRight: " << targetRight << std::endl << std::endl;
           	
           	if(too_close && targetRight && targetLeft){ // no other option than to follow target in front of us
-          	  ref_vel -= 0.3; // mph
+          	  ref_vel -= 0.25; // mph
           	  //std::cout << "lower speed...\n";
           	} else if(too_close && targetRight && !targetLeft){ // lane change to the left
           	  // change lane
