@@ -26,8 +26,8 @@ extern const double COLLISION  = pow(10, 6);
 extern const double LEGAL      = pow(10, 5);
 extern const double DANGER     = pow(10, 5);
 extern const double REACH_GOAL = pow(10, 5);
-extern const double COMFORT    = pow(10, 4);
-extern const double EFFICIENCY = pow(10, 2);
+extern const double COMFORT    = pow(10, 5);
+extern const double EFFICIENCY = pow(10, 3);
 
 
 const double DESIRED_BUFFER = 2/0.2; // time steps
@@ -44,10 +44,10 @@ double legalSpeedCost(double subjectSpeed, double speedLimit){ //keep our speed 
 // add something to keep speed close to target speed -> or solve by using cost function for distance to Target as big as possible?
 
 double efficiencySpeedCost(double subjectSpeed, double speedLimit){ // keep our speed as close as possible to speed limit of road
-  double diff = speedLimit - subjectSpeed;  
+  double diff = subjectSpeed - speedLimit;  
   double pct = diff / speedLimit;
   double multiplier;
-  if(pct < 0.5 || pct > 1.0){
+  if(pct < - 0.5 || pct > 0){
     multiplier = 1; //maybe make a complex function later...
   } else{
     multiplier = 0;
@@ -63,13 +63,18 @@ double collisionCost(vector<vector<vector<double>>> targets, vector<vector<doubl
   // 3. cost = cost for shortest time to collision
   
   double length = 4; //approximate vehicle length 
-  double width = 2; // approximate vehicle width
+  double width = 1; // approximate vehicle width
 
   int N = static_cast<int>( T/dt );
   // check when, if any, collision is present
   for(int i = 0; i <= N; i++){        
     double subject_y = subjectTrajectory[1][i];
     double subject_x = subjectTrajectory[0][i];
+    
+    /*if(i==0){
+      std::cout << "SUBJECT (x,y) = ( " << subject_x << ", " << subject_y << " )\n";
+      std::cout << "TARGETS \n";
+    }*/
    
     // for each target
     for(int j = 0; j < targets.size(); j++){
@@ -78,9 +83,13 @@ double collisionCost(vector<vector<vector<double>>> targets, vector<vector<doubl
       vector<double> target_ys = target[1];
       double target_x = target_xs[i];
       double target_y = target_ys[i];
+      /*if(i==0){
+        std::cout << "(x,y) = ( " << target_x << ", " << target_y << " )\n";
+      }*/
 
       // check collision, using whole length and with for safety measures
-      if( length <= target_x - subject_x && target_x - subject_x <= length && width <= target_y - subject_y && target_y - subject_y <= width ){
+      //d::cout << "distance between vehicles, x: " << target_x - subject_x << ", y: " << target_y - subject_y << "\n";
+      if( -length <= target_x - subject_x && target_x - subject_x <= length && -width <= target_y - subject_y && target_y - subject_y <= width ){
         std::cout << "COLLISION!! \n";
         double TTC = i*dt;
         double multiplier = exp(-pow(TTC,2));
@@ -90,6 +99,34 @@ double collisionCost(vector<vector<vector<double>>> targets, vector<vector<doubl
   }
   // no collision found, return cost 0
   return 0;
+}
+
+double jerkAccelerationCost(vector<vector<double>> subjectTrajectory, double T, double dt){
+  int N = static_cast<int>( T/dt );
+  // check jerk values
+  double totalAcceleration = 0;
+  double totalJerk = 0;
+  double previous_y = subjectTrajectory[0][0];
+  double y;
+  double previous_vy;
+  double previousAcceleration;
+  //double previous_x = subjectTrajectory[0][0];
+  for(int i = 1; i <= N; i++){        
+    //double x = subjectTrajectory[0][i];
+    y = subjectTrajectory[0][i];
+    double vy = (y-previous_y)/dt;
+    if(i > 2){
+      double acceleration = (vy-previous_vy)/dt;
+      totalAcceleration += pow(acceleration,2);
+      if(i > 3){
+      totalJerk += pow((acceleration-previousAcceleration)/dt,2);
+      }
+      previousAcceleration = acceleration;
+    }    
+    previous_y = y;
+    previous_vy = vy;
+  }
+  return (totalAcceleration + totalJerk) * COMFORT; 
 }
 
 /* distanceBufferCost(vehicle, trajectory, predictions, data){ // make sure to keep a safe distance to targets ahead
@@ -110,7 +147,7 @@ double collisionCost(vector<vector<vector<double>>> targets, vector<vector<doubl
   return multiplier * DANGER;
 }*/
 
-vector<vector<double>> getTrajectory(tk::spline splineTrajectory, double T, double ref_vel, double dt){
+vector<vector<double>> getTrajectory(tk::spline splineTrajectory, Vehicle subject, double T, double ref_vel, double dt){
   //double dt = 0.02;
   double subject_x = 0;
   double subject_y = 0;
@@ -121,11 +158,12 @@ vector<vector<double>> getTrajectory(tk::spline splineTrajectory, double T, doub
   subjectTrajectory_x.push_back(subject_x);
   subjectTrajectory_y.push_back(subject_y);
   int N = static_cast<int> (T/dt);
+  double yaw = subject.car_yaw_;
   
   
   for(int i = 1; i <= N; i++){        
     // estimate position of subject
-    subject_x += ref_vel*dt; // assuming ref_vel is the same as vx when prediction step is small
+    subject_x += ref_vel*cos(yaw)*dt; 
     subject_y = splineTrajectory(subject_x);
     subjectTrajectory_x.push_back(subject_x);
     subjectTrajectory_y.push_back(subject_y);    
@@ -137,11 +175,12 @@ vector<vector<double>> getTrajectory(tk::spline splineTrajectory, double T, doub
 
 double calculate_cost(vector<vector<vector<double>>> targets, tk::spline splineTrajectory, Vehicle vehicle, double speedLimit, double ref_vel,
                       double predictionHorizon, double dt){
-  vector<vector<double>> subjectTrajectory = getTrajectory(splineTrajectory, predictionHorizon, ref_vel, dt);
+  vector<vector<double>> subjectTrajectory = getTrajectory(splineTrajectory, vehicle, predictionHorizon, ref_vel, dt);
   double cost = 0.0;
   cost += legalSpeedCost(ref_vel, speedLimit);
   cost += efficiencySpeedCost(ref_vel, speedLimit);
   cost += collisionCost(targets, subjectTrajectory, predictionHorizon, dt);
+  cost += jerkAccelerationCost(subjectTrajectory, predictionHorizon, dt);
   //cost += distanceBufferCost(...);
   // cost += ...
     

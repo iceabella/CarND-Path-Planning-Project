@@ -15,7 +15,7 @@ class Vehicle {
     double ref_y_;
     double car_s_;
     double car_d_;
-    double car_yaw_;
+    double car_yaw_; // radians in global coordinates
     double car_speed_; // in m/s
     vector<double> ptsx_; // in local vehicle coordinates
     vector<double> ptsy_; // in local vehicle coordinates

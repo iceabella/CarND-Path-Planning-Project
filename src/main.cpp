@@ -98,11 +98,7 @@ int main() {
         
         if (event == "telemetry") {
           // j[1] is the data JSON object
-          
-          //std::cout << "new data \n";
-          std::cout << count << "\n";
-          count++;
-          
+                    
         	// Main car's localization Data
           double car_x = j[1]["x"];
           double car_y = j[1]["y"];
@@ -137,7 +133,8 @@ int main() {
 
           if(prev_size > 0){
             subject.car_s_ = end_path_s;          	
-          }        	
+          }        
+          //std::cout << "yaw: " << car_yaw << "\n";
          
 
           // 1. CHECK IMPOSSIBLE NEW STATES (because of road restrictions)
@@ -147,52 +144,8 @@ int main() {
             changeLeft = false;
           else if(lane == 2)
             changeRight = false;
-
-          // 2. PREDICT TRAJECTORIES FOR TARGETS
-          double T = 3.0; // predict 3s into the future
-          double dt = 0.4; // predcition step size 0.4s
-          double speedLim = 22; // m/s -> ~49mph
-          vector<vector<vector<double>>> targets_data;
-          for(int i=0; i<sensor_fusion.size(); i++){
-            double vx = sensor_fusion[i][3]; // m/s
-            double vy = sensor_fusion[i][4]; // m/s
-            //double check_speed = sqrt(vx*vx+vy*vy);
-            double target_x = sensor_fusion[i][1];
-            double target_y = sensor_fusion[i][2];
-            //vector<double> targetTrajectory_s;
-            //vector<double> targetTrajectory_d;
-            vector<double> targetTrajectory_x;
-            vector<double> targetTrajectory_y;            
-            targetTrajectory_x.push_back(target_x);
-            targetTrajectory_y.push_back(target_y);
-
-            //targetTrajectory_s.push_back(sensor_fusion[i][5]);
-            //targetTrajectory_d.push_back(sensor_fusion[i][6]);
-            // predict future target position
-            for(double j=0; j < T; j+=dt){
-              target_x += vx*dt;
-              target_y += vy*dt;
-              targetTrajectory_x.push_back(target_x);
-              targetTrajectory_y.push_back(target_y);
-              }
-              // shift to subject vehicle's coordinate system
-              double target_heading = atan2(vy,vx);
-              for(int j = 0; j < targetTrajectory_x.size(); j++){
-                double shift_x = targetTrajectory_x[j]-subject.car_x_;
-                double shift_y = targetTrajectory_y[j]-subject.car_y_;
-
-                targetTrajectory_x[j] = shift_x*cos(target_heading-car_yaw) - shift_y*sin(target_heading-car_yaw);
-                targetTrajectory_y[j] = shift_x*sin(target_heading-car_yaw) + shift_y*cos(target_heading-car_yaw);
-              }                          
-            vector<vector<double>> targetNTrajectory;
-            targetNTrajectory.push_back(targetTrajectory_x);
-            targetNTrajectory.push_back(targetTrajectory_y);
-            targets_data.push_back(targetNTrajectory);
-          }  
-
-          // 3. CREATE EGO TRAJECTORIES FOR EACH POSSIBLE STATE and get cost
-          // start with 1 trajectory per state maybe increase later
-
+          
+          // Get initial state for subject
           //clear earlier waypoints
           subject.ClearWaypoints();
           
@@ -212,17 +165,72 @@ int main() {
             // get new waypoints
             subject.GetStartWaypoints(ref_x, ref_y, ref_x_prev, ref_y_prev);
           }
+          
+          //std::cout << "Subject (t=0): " << subject.ptsx_[0] << ", " << subject.ptsy_[0] << "\n"; 
+
+
+          // 2. PREDICT TRAJECTORIES FOR TARGETS
+          double T = 4.0; // predict 3s into the future
+          double dt = 0.4; // predcition step size 0.4s
+          double speedLim = 22; // m/s -> ~49mph
+          vector<vector<vector<double>>> targets_data;
+          for(int i=0; i<sensor_fusion.size(); i++){
+            double vx = sensor_fusion[i][3]; // m/s
+            double vy = sensor_fusion[i][4]; // m/s
+            //double check_speed = sqrt(vx*vx+vy*vy);
+            double target_x = sensor_fusion[i][1];
+            double target_y = sensor_fusion[i][2];
+            //vector<double> targetTrajectory_s;
+            //vector<double> targetTrajectory_d;
+            vector<double> targetTrajectory_x;
+            vector<double> targetTrajectory_y;            
+            targetTrajectory_x.push_back(target_x);
+            targetTrajectory_y.push_back(target_y);
+            //std::cout << "Target N(t=0): " << target_x << ", " << target_y << ", ";
+
+            //targetTrajectory_s.push_back(sensor_fusion[i][5]);
+            //targetTrajectory_d.push_back(sensor_fusion[i][6]);
+            // predict future target position
+            for(double j=1; j < T; j+=dt){
+              target_x += vx*dt;
+              target_y += vy*dt;
+              targetTrajectory_x.push_back(target_x);
+              targetTrajectory_y.push_back(target_y);
+              }
+              // shift to subject vehicle's coordinate system
+              double target_heading = atan2(vy,vx);
+              for(int j = 0; j < targetTrajectory_x.size(); j++){
+                double shift_x = targetTrajectory_x[j]-subject.ref_x_;
+                double shift_y = targetTrajectory_y[j]-subject.ref_y_;
+
+                targetTrajectory_x[j] = shift_x*cos(target_heading-subject.car_yaw_) - shift_y*sin(target_heading-subject.car_yaw_);
+                targetTrajectory_y[j] = shift_x*sin(target_heading-subject.car_yaw_) + shift_y*cos(target_heading-subject.car_yaw_);
+                if(j==0){
+                  //std::cout << target_heading << "\n";
+                  //std::cout << "Target N(t=0) after trans: " << targetTrajectory_x[j] << ", " << targetTrajectory_y[j] << "\n";
+                }
+              }                          
+            vector<vector<double>> targetNTrajectory;
+            targetNTrajectory.push_back(targetTrajectory_x);
+            targetNTrajectory.push_back(targetTrajectory_y);
+            targets_data.push_back(targetNTrajectory);
+          }                                 
+
+          // 3. CREATE EGO TRAJECTORIES FOR EACH POSSIBLE STATE and get cost
+          // start with 1 trajectory per state maybe increase later
 
           // STATE: keep lane and speed
           subject.GetWaypoints(map_waypoints_s, map_waypoints_x, map_waypoints_y, lane);
+          
+          //std::cout << "Subject (t=0) after trans: " << subject.ptsx_[0] << ", " << subject.ptsy_[0] << "\n";
 
           // create a spline
           tk::spline s_keepLane;
           // set x,y points to the spline
-          std::cout << "s_keepLane \n";
           s_keepLane.set_points(subject.ptsx_,subject.ptsy_);
 
-          double cost_keepLaneSpeed = calculate_cost(targets_data, s_keepLane, subject, speedLim, ref_vel, T, dt);  	  
+          double cost_keepLaneSpeed = calculate_cost(targets_data, s_keepLane, subject, speedLim, ref_vel, T, dt);  	 
+          std::cout << "cost_keepLaneSpeed = " << cost_keepLaneSpeed << "\n";
 
           // STATE: decelerate in same lane
           // use same points as keeplane but lower speed
@@ -231,11 +239,13 @@ int main() {
           if(ref_velDecelerate < 0){
             ref_velDecelerate = 0;
           }
-          double cost_keepLaneDec = calculate_cost(targets_data, s_keepLane, subject, speedLim, ref_velDecelerate,T, dt);      	  
+          double cost_keepLaneDec = calculate_cost(targets_data, s_keepLane, subject, speedLim, ref_velDecelerate,T, dt);   
+          std::cout << "cost_keepLaneDec = " << cost_keepLaneDec << "\n";
 
           // STATE: accelerate in same lane
           double ref_velAccelerate = ref_vel + 0.134; // m/s
           double cost_keepLaneAcc = calculate_cost(targets_data, s_keepLane, subject, speedLim, ref_velAccelerate, T, dt);
+          std::cout << "cost_keepLaneAcc = " << cost_keepLaneAcc << "\n";
 
           // STATE: keep same speed as target in same lane
 
@@ -260,10 +270,10 @@ int main() {
             subject.GetWaypoints(map_waypoints_s, map_waypoints_x, map_waypoints_y, lane+1); // change lane to the right
 
             // set x,y points to the spline
-            std::cout << "s_changeRight \n";
             s_changeRight.set_points(subject.ptsx_, subject.ptsy_);  	
 
             cost_changeRight = calculate_cost(targets_data, s_changeRight, subject, speedLim, ref_vel, T, dt);
+            std::cout << "cost_changeRight = " << cost_changeRight << "\n";
           }
 
           // STATE: lane change left
@@ -282,23 +292,18 @@ int main() {
             subject.ptsx_.push_back(start_ptsx1);
             subject.ptsy_.push_back(start_ptsy0);
             subject.ptsy_.push_back(start_ptsy1);
-            if(count == 80 || count == 79){
+            /*if(count == 80 || count == 79){
               std::cout << subject.ptsx_[0] << "\n";
               std::cout << subject.ptsx_[1] << "\n";
-            }
+            }*/
 
             subject.GetWaypoints(map_waypoints_s, map_waypoints_x, map_waypoints_y, lane-1); // change lane to the right
 
             // set x,y points to the spline
-            std::cout << "s_changeLeft \n";
-            if(count == 80 || count == 79){
-              for(int i = 0; i < subject.ptsx_.size(); i++)
-                std::cout << subject.ptsx_[i] << "\n";
-            }
             s_changeLeft.set_points(subject.ptsx_,subject.ptsy_);  	
-            std::cout << "s_changeLeft \n";
 
-            cost_changeLeft = calculate_cost(targets_data, s_changeLeft, subject, speedLim, ref_vel, T, dt);       	 
+            cost_changeLeft = calculate_cost(targets_data, s_changeLeft, subject, speedLim, ref_vel, T, dt);       	
+            std::cout << "cost_changeLeft = " << cost_changeLeft << "\n";
           }
 
           // 5. CHOOSE TRAJECTORY WITH LOWEST COST
@@ -310,6 +315,7 @@ int main() {
 
           double minCost = -1;
           int minCost_Id = -1;
+          
           vector<double> costs = {cost_keepLaneSpeed, cost_keepLaneDec, cost_keepLaneAcc, cost_changeRight, cost_changeLeft};
           for(int i = 0; i < costs.size(); i++){
 
@@ -317,6 +323,9 @@ int main() {
               minCost = costs[i];
               minCost_Id = i;
             }
+          }
+          if(subject.car_speed_ < 0.5){
+            minCost_Id = 2;
           }
 
           tk::spline s_minCost;

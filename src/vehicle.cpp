@@ -11,7 +11,7 @@ void Vehicle::GetStartWaypoints(){
   // set yaw to radians
   ref_x_ = car_x_;
   ref_y_ = car_y_;
-  car_yaw_ = deg2rad(car_yaw_); // we get yaw in rad or deg?
+  car_yaw_ = deg2rad(car_yaw_);
 
   // previous state is almost empty, use the car as a starting reference
   // use 2 points that makes the path tagent to the car
