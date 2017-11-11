@@ -10,159 +10,12 @@
 #include "json.hpp"
 #include "spline.h"
 #include "helper_functions.hpp"
+#include "cost_functions.hpp"
 
 using namespace std;
 
 // for convenience
 using json = nlohmann::json;
-
-/*
-
-// For converting back and forth between radians and degrees.
-constexpr double pi() { return M_PI; }
-double deg2rad(double x) { return x * pi() / 180; }
-double rad2deg(double x) { return x * 180 / pi(); }
-
-// Checks if the SocketIO event has JSON data.
-// If there is data the JSON object in string format will be returned,
-// else the empty string "" will be returned.
-string hasData(string s) {
-  auto found_null = s.find("null");
-  auto b1 = s.find_first_of("[");
-  auto b2 = s.find_first_of("}");
-  if (found_null != string::npos) {
-    return "";
-  } else if (b1 != string::npos && b2 != string::npos) {
-    return s.substr(b1, b2 - b1 + 2);
-  }
-  return "";
-}
-
-double distance(double x1, double y1, double x2, double y2)
-{
-	return sqrt((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1));
-}
-int ClosestWaypoint(double x, double y, const vector<double> &maps_x, const vector<double> &maps_y)
-{
-
-	double closestLen = 100000; //large number
-	int closestWaypoint = 0;
-
-	for(int i = 0; i < maps_x.size(); i++)
-	{
-		double map_x = maps_x[i];
-		double map_y = maps_y[i];
-		double dist = distance(x,y,map_x,map_y);
-		if(dist < closestLen)
-		{
-			closestLen = dist;
-			closestWaypoint = i;
-		}
-
-	}
-
-	return closestWaypoint;
-
-}
-
-int NextWaypoint(double x, double y, double theta, const vector<double> &maps_x, const vector<double> &maps_y)
-{
-
-	int closestWaypoint = ClosestWaypoint(x,y,maps_x,maps_y);
-
-	double map_x = maps_x[closestWaypoint];
-	double map_y = maps_y[closestWaypoint];
-
-	double heading = atan2( (map_y-y),(map_x-x) );
-
-	double angle = abs(theta-heading);
-
-	if(angle > pi()/4)
-	{
-		closestWaypoint++;
-	}
-
-	return closestWaypoint;
-
-}
-
-// Transform from Cartesian x,y coordinates to Frenet s,d coordinates
-vector<double> getFrenet(double x, double y, double theta, const vector<double> &maps_x, const vector<double> &maps_y)
-{
-	int next_wp = NextWaypoint(x,y, theta, maps_x,maps_y);
-
-	int prev_wp;
-	prev_wp = next_wp-1;
-	if(next_wp == 0)
-	{
-		prev_wp  = maps_x.size()-1;
-	}
-
-	double n_x = maps_x[next_wp]-maps_x[prev_wp];
-	double n_y = maps_y[next_wp]-maps_y[prev_wp];
-	double x_x = x - maps_x[prev_wp];
-	double x_y = y - maps_y[prev_wp];
-
-	// find the projection of x onto n
-	double proj_norm = (x_x*n_x+x_y*n_y)/(n_x*n_x+n_y*n_y);
-	double proj_x = proj_norm*n_x;
-	double proj_y = proj_norm*n_y;
-
-	double frenet_d = distance(x_x,x_y,proj_x,proj_y);
-
-	//see if d value is positive or negative by comparing it to a center point
-
-	double center_x = 1000-maps_x[prev_wp];
-	double center_y = 2000-maps_y[prev_wp];
-	double centerToPos = distance(center_x,center_y,x_x,x_y);
-	double centerToRef = distance(center_x,center_y,proj_x,proj_y);
-
-	if(centerToPos <= centerToRef)
-	{
-		frenet_d *= -1;
-	}
-
-	// calculate s value
-	double frenet_s = 0;
-	for(int i = 0; i < prev_wp; i++)
-	{
-		frenet_s += distance(maps_x[i],maps_y[i],maps_x[i+1],maps_y[i+1]);
-	}
-
-	frenet_s += distance(0,0,proj_x,proj_y);
-
-	return {frenet_s,frenet_d};
-
-}
-
-// Transform from Frenet s,d coordinates to Cartesian x,y
-vector<double> getXY(double s, double d, const vector<double> &maps_s, const vector<double> &maps_x, const vector<double> &maps_y)
-{
-	int prev_wp = -1;
-
-	while(s > maps_s[prev_wp+1] && (prev_wp < (int)(maps_s.size()-1) ))
-	{
-		prev_wp++;
-	}
-
-	int wp2 = (prev_wp+1)%maps_x.size();
-
-	double heading = atan2((maps_y[wp2]-maps_y[prev_wp]),(maps_x[wp2]-maps_x[prev_wp]));
-	// the x,y,s along the segment
-	double seg_s = (s-maps_s[prev_wp]);
-
-	double seg_x = maps_x[prev_wp]+seg_s*cos(heading);
-	double seg_y = maps_y[prev_wp]+seg_s*sin(heading);
-
-	double perp_heading = heading-pi()/2;
-
-	double x = seg_x + d*cos(perp_heading);
-	double y = seg_y + d*sin(perp_heading);
-
-	return {x,y};
-
-}
-*/
 
 int main() {
   uWS::Hub h;
@@ -233,6 +86,7 @@ int main() {
           	double car_d = j[1]["d"];
           	double car_yaw = j[1]["yaw"];
           	double car_speed = j[1]["speed"];
+            car_speed = car_speed*0.44704; //mph to m/s
 
           	// Previous path data given to the Planner
           	auto previous_path_x = j[1]["previous_path_x"];
@@ -251,72 +105,167 @@ int main() {
           	// TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
           	
           	if(prev_size >0){
-          	  car_s = end_path_s;          	
+          	  car_s = end_path_s;  
+              car_d = end_path_d;
           	}
-          	
-          	bool too_close = false;
-          	bool targetLeft = false;
-          	bool targetRight = false;
-          	
-          	// find ref_v to use (if restricted by vehicles in front of us)
-          	for(int i=0; i<sensor_fusion.size(); i++){
-          	  double vx = sensor_fusion[i][3];
-        	    double vy = sensor_fusion[i][4];
-        	    double check_speed = sqrt(vx*vx+vy*vy);
-        	    double check_car_s = sensor_fusion[i][5];
-        	    check_car_s += (double) prev_size*0.02*check_speed; // where will the target vehicle be in the future? 
-        	  
-          	  float d = sensor_fusion[i][6];
-          	  // is the car anywhere inside our lane? (lane middle +/-lane width/2)
-          	  if((d < 2+4*lane+2) && (d > 2+4*lane-2)){   	              	    
-          	    // check if the target is in front of us and that the gap is smaller than 30m
-          	    if((check_car_s > car_s) && (check_car_s-car_s < 30)){
-          	      // do some logic here... e.g. lower speed
-          	      //ref_vel = check_speed-0.5; //mph
-          	      too_close = true;
-          	      /*
-          	      // change lane
-          	      if(lane==0)
-          	        lane++;
-          	      else
-          	        lane--;  */      	                	      
-          	    }
-          	  } else if(lane!=0 && ((d < 2+4*lane-2) && (d > -2+4*lane-2))){ //check lane to the left
-          	    // check if the gap to the target is too small
-          	    if((check_car_s-car_s > -20) && (check_car_s-car_s < 30))
-          	      targetLeft = true;
-          	                	  
-          	  } else if(lane!=2 && ((d < 4+4*lane+4) && (d > 2+4*lane+2))){ // check lane to the right
-          	    // check if the gap to the target is too small
-          	    if(lane==2 || ((check_car_s-car_s > -20) && (check_car_s-car_s < 30)))
-          	      targetRight = true;
-          	      
+          
+          //***************** TUNABLE PARAMS *******************
+          double T = 3.0; // predict 3s into the future
+          double dt = 0.4; // prediction step size 0.
+          double speedLim = 22.3; // m/s -> ~49.8 mph
+
+          // 1. CHECK IMPOSSIBLE NEW STATES (because of road restrictions)
+          bool changeLeft = true;
+          bool changeRight = true;
+          if(lane == 0)
+            changeLeft = false;
+          else if(lane == 2)
+            changeRight = false;
+          
+          // 2. PREDICT TRAJECTORIES FOR TARGETS
+          double real_dt = 0.02; // step size used in simulation
+          vector<vector<vector<double>>> targets_data;
+          for(int i=0; i<sensor_fusion.size(); i++){
+            double vx = sensor_fusion[i][3]; // m/s
+            double vy = sensor_fusion[i][4]; // m/s
+            double target_v = sqrt(vx*vx+vy*vy);
+
+            double target_s = sensor_fusion[i][5];
+            double target_d = sensor_fusion[i][6];
+            vector<double> targetTrajectory_s;
+            vector<double> targetTrajectory_lane;
+            vector<double> targetTrajectory_velocity;
+            double target_lane;
+            // which lane is the target in? 
+          	  if(target_d <= 4){
+                target_lane = 0; // left lane         	    	                	      
           	  }
-          	}
-          	
-          	if(lane == 0)
-          	  targetLeft = true;
-          	else if(lane == 2)
-          	  targetRight = true;
-          	
-          	std::cout << "too_close: " << too_close << std::endl;
-          	std::cout << "targetLeft: " << targetLeft << std::endl;
-          	std::cout << "targetRight: " << targetRight << std::endl << std::endl;
-          	
-          	if(too_close && targetRight && targetLeft){ // no other option than to follow target in front of us
-          	  ref_vel -= 0.25; // mph
-          	  //std::cout << "lower speed...\n";
-          	} else if(too_close && targetRight && !targetLeft){ // lane change to the left
-          	  // change lane
-      	      lane--;   
-      	    } else if(too_close && targetLeft && !targetRight){ // lane change to the right
-      	      lane++;	
-          	} else if(!too_close && ref_vel < 49.5){ // accelerate if speed is below speed limit and no target in our lane
-          	  ref_vel += 0.3; // mph
-          	  //std::cout << "higher speed...\n";
-          	}
-            //std::cout << "lane: " << lane << std::endl;
-          	
+          	  else if(4.0 < target_d && target_d <= 8.0){
+                target_lane = 1; // middle lane
+          	  } else if(8.0 < target_d){
+                target_lane = 2; // right lane
+          	  }
+            
+            // we will predict subject position from end of last trajectory point sent to simulator
+            // -> start predition for target shall start at length(sent subject points to simulator)
+            target_s += target_v*prev_size*real_dt;
+
+            targetTrajectory_s.push_back(target_s - car_s);
+            targetTrajectory_lane.push_back(target_lane);
+            targetTrajectory_velocity.push_back(target_v);
+
+            // predict future target position
+            for(double j=1; j < T; j+=dt){
+              target_s += target_v*dt; // assuming keeping lane 
+              // assuming target keeps lane d, i.e. d is not changing and shift to subject vehicle's coordinates
+              targetTrajectory_s.push_back(target_s - car_s);
+              targetTrajectory_lane.push_back(target_lane);
+              targetTrajectory_velocity.push_back(target_v);
+              }
+                       
+            vector<vector<double>> targetNTrajectory;
+            targetNTrajectory.push_back(targetTrajectory_s);
+            targetNTrajectory.push_back(targetTrajectory_lane);
+            targetNTrajectory.push_back(targetTrajectory_velocity);
+            targets_data.push_back(targetNTrajectory);
+          }
+          
+          
+          // 3. GET COST FOR EACH SUBJECT TRAJECTORY
+          // start with 1 trajectory per state maybe increase later
+
+          // STATE: keep lane and speed
+          double cost_keepLaneSpeed = calculate_cost(targets_data, lane, speedLim, ref_vel, T, dt);
+          std::cout << "cost_keepLaneSpeed = " << cost_keepLaneSpeed << "\n";
+
+          // STATE: decelerate in same lane
+          // use same points as keeplane but lower speed
+
+          double ref_velDecelerate = ref_vel - 3*dt*dt; // m/s (a = -2m/s²)
+          if(ref_velDecelerate < 0){
+            ref_velDecelerate = 0;
+          }
+          double cost_keepLaneDec = calculate_cost(targets_data, lane, speedLim, ref_velDecelerate, T, dt);
+          std::cout << "cost_keepLaneDec = " << cost_keepLaneDec << "\n";
+          
+          double ref_velDecelerateHard = ref_vel - 5*dt*dt; // m/s (a = -2m/s²)
+          if(ref_velDecelerateHard < 0){
+            ref_velDecelerateHard = 0;
+          }
+          double cost_keepLaneDecHard= calculate_cost(targets_data, lane, speedLim, ref_velDecelerateHard, T, dt);
+          std::cout << "cost_keepLaneDecHard = " << cost_keepLaneDecHard << "\n";
+
+          // STATE: accelerate in same lane
+          double ref_velAccelerate = ref_vel + 3*dt*dt; // m/s (a = 2 m/s²)
+          double cost_keepLaneAcc = calculate_cost(targets_data, lane, speedLim, ref_velAccelerate, T, dt);
+          
+          std::cout << "cost_keepLaneAcc = " << cost_keepLaneAcc << "\n";
+
+          // STATE: keep same speed as target in same lane
+
+
+          // STATE: lane change right
+          double cost_changeRight = -1;
+          if(changeRight){
+            cost_changeRight = calculate_cost(targets_data, lane+1, speedLim, ref_vel, T, dt);
+            std::cout << "cost_changeRight = " << cost_changeRight << "\n";
+          }
+
+          // STATE: lane change left
+          double cost_changeLeft = -1; 
+          if(changeLeft){
+         
+            cost_changeLeft = calculate_cost(targets_data, lane-1, speedLim, ref_vel, T, dt);
+            std::cout << "cost_changeLeft = " << cost_changeLeft << "\n";
+          }
+
+          // 5. CHOOSE TRAJECTORY WITH LOWEST COST
+          const int KEEPLANESPEED = 0;
+          const int KEEPLANEDEC = 1;
+          const int KEEPLANEACC = 2;
+          const int CHANGERIGHT = 3;
+          const int CHANGELEFT = 4;
+          const int KEEPLANEDECHARD = 5;
+
+          double minCost = -1;
+          int minCost_Id = -1;
+          
+          vector<double> costs = {cost_keepLaneSpeed, cost_keepLaneDec, cost_keepLaneAcc, cost_changeRight, cost_changeLeft, cost_keepLaneDecHard};
+          for(int i = 0; i < costs.size(); i++){
+
+            if((costs[i] < minCost && costs[i] > -1) || minCost_Id == -1){
+              minCost = costs[i];
+              minCost_Id = i;
+            }
+          }
+
+          switch(minCost_Id){
+            case KEEPLANEDEC:
+            {
+              ref_vel = ref_velDecelerate;
+            }
+            break;
+            case KEEPLANEDECHARD:
+              ref_vel = ref_velDecelerateHard;
+              break;
+            case KEEPLANESPEED:
+              break;
+            case KEEPLANEACC:
+            {
+              ref_vel = ref_velAccelerate;
+            }
+            break;
+            case CHANGERIGHT:
+              lane++;
+              break;
+            case CHANGELEFT:
+              lane--;
+              break;                  
+          }
+          std::cout <<"chosen state: " << minCost_Id << "\n\n";
+          
+          
+                    	
           	// list of widely spaced waypoints, evenly spaced at 30m
           	vector<double> ptsx;
           	vector<double> ptsy;
@@ -396,10 +345,12 @@ int main() {
           	double target_dist = sqrt(target_x*target_x + target_y*target_y);
           	
           	double x_add_on = 0;
+            
+            double numberTrajectoryPoints = 50; // numberTrajectoryPoints*real_dt = prediction horizon
           	
-          	// fill up the rest of our path planner with new points, total number of points will here always be 50
-          	for(int i=1;i<= 50-previous_path_x.size();i++){
-          	  double N = target_dist/(0.02*ref_vel/2.24); // 0.02s = 20ms -> update speed, 2.24 mph -> m/s
+          	// fill up the rest of our path planner with new points, total number of points will here always be numberTrajectoryPoints
+          	for(int i=1;i<= numberTrajectoryPoints-previous_path_x.size();i++){
+          	  double N = target_dist/(real_dt*ref_vel); // 0.02s = 20ms -> update speed, 2.24 mph -> m/s
           	  double x_point = x_add_on + target_x/N;
           	  double y_point = s(x_point);
           	  
