@@ -1,31 +1,14 @@
 /*
  * cost_functions.hpp
  */
- 
 
-/* IDEA?
-Predict target vehicle trajectories T (e.g. 3s) ahead.
-Use safety margins (we do not know the size of the vehicles)
-[if target speed > speed limit, do not change lane]
-Generate some trajectories straight, turn left, turn right (these will generate different speed, jerk etc.)
-- straight keeping speed limit
-- if target ahead, trajectory with a end position at a safe distance behind the vehicle.
-- trajectory turing to the right and left
-- if target in lane to the left/right, trajectories on a safe distance to targets (ahead/behind)
-Check that trajectories are within limits (jerk, acceleration etc)
-Calculate cost for each trajectory
-Choose the one with lowest cost
-*/
 
 #include <cmath>
-//#include "vehicle.hpp"
-#include "spline.h"
 
 // priority levels for costs
 extern const double COLLISION  = pow(10, 6);
 extern const double LEGAL      = pow(10, 5);
 extern const double DANGER     = pow(10, 5);
-//extern const double REACH_GOAL = pow(10, 5);
 extern const double COMFORT    = pow(10, 4);
 extern const double EFFICIENCY = pow(10, 2);
 
@@ -38,7 +21,6 @@ double legalSpeedCost(double subjectSpeed, double speedLimit){ //keep our speed 
   return multiplier * LEGAL;
 }
 
-// add something to keep speed close to target speed -> or solve by using cost function for distance to Target as big as possible?
 
 double efficiencySpeedCost(double subjectSpeed, double speedLimit){ // keep our speed as close as possible to speed limit of road
   double diff = subjectSpeed - speedLimit;  
@@ -49,15 +31,14 @@ double efficiencySpeedCost(double subjectSpeed, double speedLimit){ // keep our 
   } else{
     multiplier = 0;
   }
-  //multiplier = pct ** 2*/
   return multiplier * EFFICIENCY;
 
 }
 
 
 double collisionCost(vector<vector<vector<double>>> targets, int ref_lane, double ref_vel, double T, double dt){ // make sure to not collide with target
-  // 1. check for each time step for prediction horizon how close vehicles + safe distance (vehicle size) is to end up in collision
-  // 2. check for shortest time to collision during whole prediction horizon
+  // 1. check for each time step for prediction horizon how close vehicles (vehicle size) is to end up in collision
+  // 2. check for shortest time to collision during prediction horizon
   // 3. cost = cost for shortest time to collision
   
   const double length = 6; //approximate vehicle length 
@@ -91,6 +72,7 @@ double collisionCost(vector<vector<vector<double>>> targets, int ref_lane, doubl
   return 0;
 }
 
+
 double jerkAccelerationCost(vector<vector<double>> subjectTrajectory, double T, double dt){
   int N = static_cast<int>( T/dt );
   // check jerk values
@@ -100,9 +82,8 @@ double jerkAccelerationCost(vector<vector<double>> subjectTrajectory, double T, 
   double y;
   double previous_vy;
   double previousAcceleration;
-  //double previous_x = subjectTrajectory[0][0];
+
   for(int i = 1; i <= N; i++){        
-    //double x = subjectTrajectory[0][i];
     y = subjectTrajectory[0][i];
     double vy = (y-previous_y)/dt;
     if(i > 2){
@@ -121,7 +102,7 @@ double jerkAccelerationCost(vector<vector<double>> subjectTrajectory, double T, 
 
 double distanceBufferCost(vector<vector<vector<double>>> targets, int ref_lane, double ref_vel, double T, double dt){ // make sure to keep a safe distance to targets ahead
   // 1. check in each time step for prediction horizon where both vehicles will be
-  // 2. save check what is the shortest distance to target during whole prediction horizon
+  // 2. check what is the shortest distance to target during whole prediction horizon
   // 3. Check which cost this distance gives
   
   const double desiredTime = 2.0; // s
@@ -158,10 +139,7 @@ double distanceBufferCost(vector<vector<vector<double>>> targets, int ref_lane, 
     }    
   }
   
-  //std::cout << "update closest distance: " << closestDistance << "\n";
-  
   if(relativeVel == 0){
-    std::cout << "\n relative vel is 0 " << "\n\n";
     relativeVel = 0.01;
   }
 
@@ -170,7 +148,6 @@ double distanceBufferCost(vector<vector<vector<double>>> targets, int ref_lane, 
 
   double timeAway = signClosestDistance*closestDistance / relativeVel;
   if(timeAway > desiredTime || timeAway < 0){ // if time away is < 0 the distance between vehicles are increasing
-    //std::cout << "timeAway= " << timeAway << "\n\n";
     return 0.0;
   }
   
@@ -186,9 +163,7 @@ double calculate_cost(vector<vector<vector<double>>> targets, int ref_lane, doub
   cost += efficiencySpeedCost(ref_vel, speedLimit);
   cost += collisionCost(targets, ref_lane, ref_vel, predictionHorizon, dt);
   //cost += jerkAccelerationCost(subjectTrajectory, predictionHorizon, dt); // maybe add lane to vehicle and check if lane > or < vehicle.lane_ add some extra cost
-  double distancecost = distanceBufferCost(targets, ref_lane, ref_vel, predictionHorizon, dt);
-  //std::cout << "distance cost: " << distancecost << "\n";
-  cost += distancecost;
+  cost += distanceBufferCost(targets, ref_lane, ref_vel, predictionHorizon, dt);
   // cost += ...
     
   return cost;
