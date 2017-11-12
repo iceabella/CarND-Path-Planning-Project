@@ -59,8 +59,10 @@ int main() {
   
   // have a reference velocity below speed limit
   double ref_vel = 0; //mph, we start at 0
+  
+  int count = 0; // to make sure that we do not fill out first states with 0s
 
-  h.onMessage([&ref_vel, &lane, &map_waypoints_x, &map_waypoints_y, &map_waypoints_s, &map_waypoints_dx, &map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+  h.onMessage([&count, &ref_vel, &lane, &map_waypoints_x, &map_waypoints_y, &map_waypoints_s, &map_waypoints_dx, &map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
@@ -230,30 +232,36 @@ int main() {
               minCost_Id = i;
             }
           }
-
-          switch(minCost_Id){
-            case KEEPLANEDEC:
-            {
-              ref_vel = ref_velDecelerate;
+          
+          if(count < 2){
+            ref_vel = ref_velAccelerate;
+          }else{           
+            switch(minCost_Id){
+              case KEEPLANEDEC:
+              {
+                ref_vel = ref_velDecelerate;
+              }
+              break;
+              case KEEPLANEDECHARD:
+                ref_vel = ref_velDecelerateHard;
+                break;
+              case KEEPLANESPEED:
+                break;
+              case KEEPLANEACC:
+              {
+                ref_vel = ref_velAccelerate;
+              }
+              break;
+              case CHANGERIGHT:
+                lane++;
+                break;
+              case CHANGELEFT:
+                lane--;
+                break;                  
             }
-            break;
-            case KEEPLANEDECHARD:
-              ref_vel = ref_velDecelerateHard;
-              break;
-            case KEEPLANESPEED:
-              break;
-            case KEEPLANEACC:
-            {
-              ref_vel = ref_velAccelerate;
-            }
-            break;
-            case CHANGERIGHT:
-              lane++;
-              break;
-            case CHANGELEFT:
-              lane--;
-              break;                  
           }
+          count++;
+            
           std::cout <<"chosen state: " << minCost_Id << "\n\n";
 
 
