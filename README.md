@@ -36,13 +36,13 @@ target_s += target_v*prev_size*real_dt;
 as can be seen in main.cpp, line 150.
 
 The costs considered (in decreasing order) are:
-- collision cost
+- collision cost:
 Cost dependent on how close we are to a collision, cost = exp(-TTC^2) (TTC = Time To Collision). If no collision is seen during prediction horizon cost will be 0.
-- legal speed cost
+- legal speed cost:
 Cost to keep our speed below the speed limit.
-- distance buffer cost
+- distance buffer cost:
 Cost to keep us on a safe distance to targets.
-- efficiency speed cost
+- efficiency speed cost:
 Cost to keep our speed as close as possible to the speed  limit.
 
 ### Choosing trajectory with lowest cost
@@ -58,6 +58,7 @@ Quite often the cost for:
  - keep lane and speed
  - lane change right (keep speed)
  - lane change left (keep speed)
+
 are the same since for the moment no jerk or acceleration costs are used, which means that there is not any additional cost to change lane. The jerk is solved instead by creating a smooth trajectory (see next section) as well as not having a too high acceleration/deceleration, which also solves the acceleration issue. Worth noting is also that if more points are sent to the simulator it will also take longer for the subject vehicle to change from one trajectory choice to another, why jerk will be a smaller problem. Note though that too many points sent to the simulator will make the vehicle slower in reaction to sudden changes, why this needs to be tuned carefully.
 
 ### Create trajectory points to use in simulator
